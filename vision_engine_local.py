@@ -198,8 +198,16 @@ def check_ollama_models() -> dict[str, list[str]]:
         Dict with 'vision' and 'text' model lists.
     """
     try:
-        models = ollama.list()
-        model_names = [model['name'] for model in models.get('models', [])]
+        lr = ollama.list()
+        raw = lr.get('models', []) if isinstance(lr, dict) else getattr(lr, 'models', [])
+        model_names: list[str] = []
+        for m in raw:
+            if isinstance(m, dict):
+                n = m.get('name') or m.get('model')
+            else:
+                n = getattr(m, 'model', None) or getattr(m, 'name', None)
+            if n:
+                model_names.append(n)
 
         # Categorize models
         vision_models = [name for name in model_names if any(v in name.lower() for v in ['llava', 'bakllava', 'moondream'])]

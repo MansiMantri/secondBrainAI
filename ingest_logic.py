@@ -361,8 +361,8 @@ def extract_video_frames(
         seconds_between = max(min_seconds_between_frames, duration_s / float(max_frames))
 
     # Sample 1 frame per `seconds_between` seconds, capped by -frames:v.
-    # fps filter supports fractional values like 1/5.
-    fps_filter = f"1/{seconds_between:.3f}"
+    # fps filter requires the "fps=" prefix (e.g. fps=1/5), not a bare fraction.
+    fps_filter = f"fps=1/{seconds_between:.6f}"
 
     out_pattern = str(output_dir / "frame_%04d.png")
     ffmpeg_cmd = [
