@@ -32,7 +32,7 @@ pip install -r requirements_local.txt
 
 ### 4. Run the Application
 ```bash
-streamlit run app_local.py
+c
 ```
 
 ## 🔧 Alternative Models

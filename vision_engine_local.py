@@ -211,8 +211,24 @@ def check_ollama_models() -> dict[str, list[str]]:
             if n:
                 model_names.append(n)
 
-        # Categorize models
-        vision_models = [name for name in model_names if any(v in name.lower() for v in ['llava', 'bakllava', 'moondream'])]
+        # Categorize models (vision = multimodal / image-capable names Ollama commonly uses)
+        _vision_markers = (
+            "llava",
+            "bakllava",
+            "moondream",
+            "minicpm-v",
+            "qwen-vl",
+            "qwen2-vl",
+            "qwen2.5-vl",
+            "llama3.2-vision",
+            "granite3.2-vision",
+            "pixtral",
+            "internvl",
+            "glm-4v",
+        )
+        vision_models = [
+            name for name in model_names if any(m in name.lower() for m in _vision_markers)
+        ]
         text_models = [name for name in model_names if name not in vision_models]
 
         return {
@@ -229,6 +245,141 @@ def check_ollama_models() -> dict[str, list[str]]:
             'error': str(e)
         }
 
+
+def format_multi_source_context(sources: list[dict[str, Any]]) -> str:
+    """
+    Build a single text block from processed sources for LLM context.
+
+    Each source dict should include:
+      - 'name': str (display filename)
+      - 'segments': list[tuple[str, str]] (label, visual summary text)
+      - 'transcript': optional str (e.g. video audio)
+    """
+    blocks: list[str] = []
+    for src in sources:
+        name = str(src.get("name", "unknown"))
+        blocks.append(f"=== SOURCE: {name} ===")
+        for label, summ in src.get("segments") or []:
+            blocks.append(f"--- {label} ---\n{str(summ).strip()}")
+        tr = src.get("transcript")
+        if tr and str(tr).strip():
+            blocks.append(f"--- AUDIO TRANSCRIPT ({name}) ---\n{str(tr).strip()}")
+    return "\n\n".join(blocks)
+
+
+def synthesize_multi_source_corpus(
+    sources: list[dict[str, Any]],
+    *,
+    model_name: str = DEFAULT_TEXT_MODEL,
+    temperature: float = 0.3,
+) -> str:
+    """
+    One cohesive summary across multiple uploaded documents/media.
+
+    Each item in ``sources`` matches :func:`format_multi_source_context`.
+    """
+    if not sources:
+        return "No content to summarize."
+
+    context = format_multi_source_context(sources)
+    if not context.strip():
+        return "No content to summarize."
+
+    system_prompt = compose_system_prompt(
+        "You synthesize content from multiple documents and/or media into one clear overview. "
+        "Integrate related ideas across sources; note which source supports important claims when useful. "
+        "Write connected prose; avoid bare bullet dumps unless it genuinely helps the reader."
+    )
+
+    user_prompt = (
+        "The following is extracted from one or more uploads (visual descriptions per segment, "
+        "plus optional audio transcripts for videos). Produce ONE unified summary that covers "
+        "all material at a high level, highlighting themes, facts, and how pieces relate.\n\n"
+        f"{context}"
+    )
+
+    try:
+        response = ollama.chat(
+            model=model_name,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt},
+            ],
+            options={
+                'temperature': temperature,
+                'num_predict': 2048,
+            },
+        )
+        return response['message']['content'].strip()
+    except Exception as e:
+        raise RuntimeError(f"Local synthesis model failed (multi-source): {e}") from e
+
+
+def answer_prompt_over_corpus(
+    user_prompt: str,
+    *,
+    corpus_summary: str,
+    full_context: str,
+    model_name: str = DEFAULT_TEXT_MODEL,
+    temperature: float = 0.4,
+    prior_exchanges: Optional[str] = None,
+) -> str:
+    """
+    Answer a user question using the summarized corpus and full segment/transcript context.
+
+    Optional ``prior_exchanges`` is formatted earlier Q&A in this session (for follow-up prompts).
+    """
+    q = (user_prompt or "").strip()
+    if not q:
+        return "Enter a question or instruction."
+
+    system_prompt = compose_system_prompt(
+        "You respond using ONLY the synthesis and detailed context provided below. "
+        "If something cannot be supported by that material, say clearly that it is not stated there. "
+        "Stay focused on the user's request. "
+        "If prior Q&A is included, use it only for conversational continuity — facts must still come "
+        "from the document context."
+    )
+
+    # Trim extremely large blobs defensively (local context limits vary).
+    detail = full_context.strip()
+    max_detail = 120_000
+    if len(detail) > max_detail:
+        detail = detail[:max_detail] + "\n\n[... truncated for length ...]"
+
+    prior_block = ""
+    if prior_exchanges and prior_exchanges.strip():
+        pe = prior_exchanges.strip()
+        max_prior = 16_000
+        if len(pe) > max_prior:
+            pe = pe[:max_prior] + "\n\n[... prior Q&A truncated ...]"
+        prior_block = f"=== PRIOR Q&A (this session) ===\n{pe}\n\n"
+
+    user_message = (
+        "=== COMBINED SUMMARY (high level) ===\n"
+        f"{corpus_summary.strip()}\n\n"
+        "=== DETAILED CONTEXT (segments and transcripts) ===\n"
+        f"{detail}\n\n"
+        f"{prior_block}"
+        "=== USER REQUEST ===\n"
+        f"{q}"
+    )
+
+    try:
+        response = ollama.chat(
+            model=model_name,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_message},
+            ],
+            options={
+                'temperature': temperature,
+                'num_predict': 2048,
+            },
+        )
+        return response['message']['content'].strip()
+    except Exception as e:
+        raise RuntimeError(f"Local model failed (Q&A over corpus): {e}") from e
 
 
 # Backwards compatibility - alias the local functions
