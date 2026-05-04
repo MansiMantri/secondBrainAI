@@ -17,6 +17,8 @@ from typing import Any, Optional, Union
 import ollama  # type: ignore[import-not-found]
 from PIL import Image  # type: ignore[import-not-found]
 
+from model_guidelines import compose_system_prompt
+
 
 DEFAULT_VISION_MODEL = "llava:7b"  # or "llava:13b" for better quality
 DEFAULT_TEXT_MODEL = "llama2:7b"   # for synthesis tasks
@@ -73,8 +75,8 @@ def visual_summary_from_image_local(
     # Encode image to base64
     image_b64 = _encode_image_to_base64(image_input)
 
-    # Create prompt for vision model
-    system_prompt = (
+    # Create prompt for vision model (universal guidelines + task-specific role)
+    system_prompt = compose_system_prompt(
         "You are a helpful assistant that describes images in detail. "
         "Focus on the visual content, structure, and key elements. "
         "Do not mention that you are looking at an image. "
@@ -152,8 +154,8 @@ def video_summary_from_frame_summaries_local(
     if transcript and transcript.strip():
         context += f"\n\n--- AUDIO TRANSCRIPT ---\n{transcript.strip()}"
 
-    # Create synthesis prompt
-    system_prompt = (
+    # Create synthesis prompt (universal guidelines + task-specific role)
+    system_prompt = compose_system_prompt(
         "You are a helpful assistant that creates cohesive video summaries. "
         "Combine visual descriptions and audio content into a single, flowing narrative."
     )

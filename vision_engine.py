@@ -19,6 +19,8 @@ from PIL import Image  # type: ignore[import-not-found]
 from dotenv import load_dotenv  # type: ignore[import-not-found]
 from google.api_core.exceptions import NotFound as ApiNotFound
 
+from model_guidelines import compose_system_prompt
+
 
 DEFAULT_MODEL_NAME = "models/gemini-1.5-flash-002"
 
@@ -191,7 +193,7 @@ def visual_summary_from_image(
     pil_img = _coerce_to_pil(image_input)
 
     genai.configure(api_key=_load_api_key())
-    system_instruction = (
+    system_instruction = compose_system_prompt(
         "You generate Visual Summaries for an mRAG system. "
         "Do NOT use OCR or copy small text verbatim. "
         "Interpret the diagram: describe what components exist, how they connect, "
@@ -318,9 +320,18 @@ def video_summary_from_frame_summaries(
     generation_config = {"temperature": 0.3, "max_output_tokens": max(max_output_tokens, 512)}
     last_err: Optional[Exception] = None
 
+    video_system_instruction = compose_system_prompt(
+        "You synthesize multimodal learning content from frame-level visual summaries "
+        "and optional transcripts. Produce one coherent narrative; do not invent scenes "
+        "or dialogue not supported by the inputs."
+    )
+
     for candidate in model_candidates:
         try:
-            model = genai.GenerativeModel(model_name=candidate)
+            model = genai.GenerativeModel(
+                model_name=candidate,
+                system_instruction=video_system_instruction,
+            )
             response = model.generate_content(prompt, generation_config=generation_config)
             text = getattr(response, "text", None) or str(response)
             if text and text.strip():
