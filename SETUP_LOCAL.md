@@ -21,17 +21,17 @@ This guide covers the complete setup process for running SecondBrainAI locally u
 
 ## 🖥️ System Requirements
 
-### Minimum Requirements (LLaVA 7B + Llama2 7B)
+### Minimum Requirements (lighter optional stack; see [AI Model Downloads](#ai-model-downloads))
 - **Operating System**: macOS 12+, Ubuntu 18.04+, Windows 10/11
-- **RAM**: 16GB (recommended 32GB)
-- **Storage**: 25GB free space for models + data
+- **RAM**: 16GB (recommended 32GB for default models below)
+- **Storage**: ~25GB free for smaller models; **~35–45GB** recommended for default `llama3` + `llava:13b` pulls + data
 - **CPU**: Modern multi-core processor
 - **GPU**: Optional (NVIDIA/AMD with CUDA/Metal support for faster inference)
 
-### Recommended Requirements (LLaVA 13B + Llama2 13B)
-- **RAM**: 32GB (64GB for Llama2 70B)
-- **Storage**: 50GB free space
-- **GPU**: NVIDIA RTX 30-series or better (with CUDA)
+### Recommended Requirements (default setup: Llama 3 + LLaVA 13B)
+- **RAM**: 32GB
+- **Storage**: 45GB+ free space for models + processed uploads
+- **GPU**: Apple Silicon / NVIDIA RTX 20-series or better when available (Ollama uses GPU automatically when supported)
 
 ### Supported Platforms
 - ✅ macOS (Intel/Apple Silicon)
@@ -85,57 +85,59 @@ Expected output: Shows installed models (initially empty)
 
 ## 🤖 AI Model Downloads
 
-Download the required AI models for vision analysis and text synthesis.
+SecondBrainAI’s defaults (see `vision_engine_local.py`) assume **strong text + vision** models. Install these first for the best summaries and alignment with the PDF/page pipeline.
 
-### Required Models (Minimum Setup)
+### Default / Recommended (best quality — matches automated `setup_local.sh`)
 ```bash
-# Vision model for image/frame analysis
-ollama pull llava:7b
+# Text: summaries, per-page merge, combined summary, Ask/Q&A
+ollama pull llama3
 
-# Text model for video synthesis
-ollama pull llama2:7b
+# Vision: per-page / per-frame image understanding (figures, layout)
+ollama pull llava:13b
 ```
 
-### Recommended Models (Better Quality)
-```bash
-# Higher quality vision model
-ollama pull llava:13b
+These are the models **`setup_local.sh` pulls** when they are not already installed (`ollama list` is checked first). Expect **roughly 12–18 GB** total depending on Ollama tags and quantization.
 
-# Better text synthesis
-ollama pull llama2:13b
+### Low-resource alternative (smaller downloads)
+If disk or RAM is tight, use smaller models and select them in the app sidebar:
+```bash
+ollama pull llava:7b
+ollama pull llama2:7b
 ```
 
 ### Optional Models (Advanced Users)
 ```bash
-# Best vision quality (slowest)
+# Newer Llama 3.x variants (often listed as separate tags in `ollama list`)
+ollama pull llama3.2
+ollama pull llama3.1
+
+# Alternative instruct models
+ollama pull qwen2.5
+ollama pull mistral
+
+# Best vision quality (slowest / largest)
 ollama pull llava:34b
 
-# Code-focused synthesis
-ollama pull codellama:7b
-
-# Chat-optimized synthesis
-ollama pull orca-mini:7b
-
-# Lightweight alternative vision
+# Lightweight vision alternatives
 ollama pull moondream
 ollama pull bakllava
+
+# Code-focused (optional)
+ollama pull codellama:7b
 ```
 
-### Model Download Times
-- `llava:7b`: ~4GB, 5-10 minutes
-- `llava:13b`: ~7GB, 10-20 minutes
-- `llama2:7b`: ~4GB, 5-10 minutes
-- `llama2:13b`: ~7GB, 10-20 minutes
+### Model download times (order of magnitude)
+- `llama3`: ~4–5 GB, varies by tag
+- `llava:13b`: ~8 GB
+- `llava:7b`: ~4–5 GB
+- `llama2:7b`: ~4 GB
 
 ### Verification
 ```bash
 # List all downloaded models
 ollama list
 
-# Expected output:
-# NAME            ID              SIZE      MODIFIED
-# llava:7b        8dd30f6b0cb1    4.7 GB    2 minutes ago
-# llama2:7b       78e26419b446    3.8 GB    1 minute ago
+# You should see at least llama3 (or another llama3* tag) and llava:13b after default setup
 ```
 
 ---
@@ -239,7 +241,7 @@ Create `.env` file in project root:
 ollama list
 
 # Test basic Ollama functionality
-echo "Hello, describe a cat" | ollama run llama2:7b
+echo "Hello, describe a cat" | ollama run llama3
 ```
 
 ### 2. Test Python Environment
@@ -272,7 +274,7 @@ print('Test image created')
 python3 -c "
 from vision_engine_local import visual_summary_from_image
 try:
-    result = visual_summary_from_image('test_image.png', model_name='llava:7b')
+    result = visual_summary_from_image('test_image.png', model_name='llava:13b')
     print('Vision test successful:', result[:100] + '...')
 except Exception as e:
     print('Vision test failed:', e)
@@ -281,11 +283,13 @@ except Exception as e:
 
 ### 4. Run the Application
 ```bash
-# Start the local Streamlit app
+# Primary UI (recommended)
+streamlit run app.py
+
+# Minimal demo
 streamlit run app_local.py
 
-# Expected: Opens browser with SecondBrainAI Local interface
-# Check Ollama Status section shows connected models
+# Expected: Opens browser; sidebar model lists should include llama3 / llava:13b after setup
 ```
 
 ### 5. Full Pipeline Test
@@ -328,7 +332,7 @@ ollama serve
 ping 8.8.8.8
 
 # Retry download
-ollama pull llava:7b --retry 3
+ollama pull llava:13b
 
 # Check disk space
 df -h
@@ -393,11 +397,15 @@ ollama pull bakllava
 
 **Poor text synthesis quality**
 ```bash
-# Try different text models
-ollama pull codellama:7b
-ollama pull orca-mini:7b
+# Prefer stronger instruct models (pull then select in sidebar)
+ollama pull llama3
+ollama pull qwen2.5
+ollama pull mistral
 
-# Adjust temperature in vision_engine_local.py
+# Optional legacy / niche
+ollama pull codellama:7b
+
+# Adjust temperature in vision_engine_local.py if needed
 # Lower temperature (0.1-0.3) for more focused synthesis
 ```
 
@@ -445,10 +453,10 @@ git merge feature/local-ollama-support
 cp .env .env.example
 # Remove actual API keys, keep structure
 
-# Document in README which models team should install
-echo "# Required Ollama Models
-ollama pull llava:7b
-ollama pull llama2:7b" > models_required.txt
+# Document which models team should install (defaults match setup_local.sh)
+echo "# Recommended Ollama models (see SETUP_LOCAL.md)
+ollama pull llama3
+ollama pull llava:13b" > models_required.txt
 ```
 
 ### CI/CD Considerations
@@ -465,47 +473,17 @@ ollama pull llama2:7b" > models_required.txt
 
 ---
 
-## 🚀 Quick Setup Script (Optional)
+## 🚀 Quick Setup Script
 
-Create `setup_local.sh` for automated setup:
+The repository includes **`setup_local.sh`** in the `secondBrainAI` folder. It installs Ollama (macOS via Homebrew when available), starts the service, pulls **`llama3`** and **`llava:13b`** when missing, creates `secondbrain_env`, and installs `requirements_local.txt`.
 
 ```bash
-#!/bin/bash
-# setup_local.sh - Automated setup for SecondBrainAI Local
-
-echo "🚀 Setting up SecondBrainAI Local..."
-
-# Check Python
-python3 --version || { echo "Python 3 required"; exit 1; }
-
-# Install Ollama
-if ! command -v ollama &> /dev/null; then
-    echo "📦 Installing Ollama..."
-    curl -fsSL https://ollama.ai/install.sh | sh
-fi
-
-# Start Ollama
-echo "🦙 Starting Ollama..."
-ollama serve &
-
-# Wait for Ollama to start
-sleep 5
-
-# Download models
-echo "🤖 Downloading AI models..."
-ollama pull llava:7b
-ollama pull llama2:7b
-
-# Setup Python environment
-echo "🐍 Setting up Python environment..."
-python3 -m venv secondbrain_env
-source secondbrain_env/bin/activate
-pip install -r requirements_local.txt
-
-echo "✅ Setup complete! Run: streamlit run app_local.py"
+cd secondBrainAI
+chmod +x setup_local.sh
+bash setup_local.sh
 ```
 
-Make executable: `chmod +x setup_local.sh`
+After it finishes: `source secondbrain_env/bin/activate` then `streamlit run app.py`.
 
 ---
 
@@ -514,7 +492,7 @@ Make executable: `chmod +x setup_local.sh`
 ### Getting Help
 1. Check this guide's troubleshooting section
 2. Verify Ollama status: `ollama list`
-3. Test models individually: `ollama run llava:7b "describe this image" --image test.jpg`
+3. Test models individually, e.g. `ollama run llava:13b` (vision) and `ollama run llama3` (text)
 4. Check system resources: RAM, disk space, GPU
 
 ### Useful Links
@@ -530,6 +508,5 @@ Make executable: `chmod +x setup_local.sh`
 
 ---
 
-*Last updated: April 1, 2026*
-*Tested on: macOS 14.0, Ubuntu 22.04, Windows 11*</content>
-<parameter name="filePath">/Users/sanchitvartak/Desktop/Spring26/AI_BNgan/ai-project/secondBrainAI/SETUP_LOCAL.md
+*Last updated: May 4, 2026*  
+*Tested on: macOS 14.0, Ubuntu 22.04, Windows 11 (WSL)*

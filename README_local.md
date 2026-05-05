@@ -16,14 +16,17 @@ curl -fsSL https://ollama.ai/install.sh | sh
 # Download from https://ollama.ai/download
 ```
 
-### 2. Install Required Models
-```bash
-# Vision model for image understanding
-ollama pull llava:7b
+### 2. Install Recommended Models
+Matches defaults in `vision_engine_local.py` and **`bash setup_local.sh`**:
 
-# Text model for synthesis (optional, defaults to llama2)
-ollama pull llama2:7b
+```bash
+ollama pull llama3        # text: summaries, page merge, Ask/Q&A
+ollama pull llava:13b     # vision: per-page / frame analysis
 ```
+
+**Low-resource alternative:** `ollama pull llava:7b` and `ollama pull llama2:7b`, then pick those in the sidebar.
+
+**Automated install:** from the `secondBrainAI` folder, run `bash setup_local.sh` (installs the same default models, venv, and `requirements_local.txt`). See **SETUP_LOCAL.md** for details.
 
 ### 3. Install Python Dependencies
 ```bash
@@ -31,6 +34,15 @@ pip install -r requirements_local.txt
 ```
 
 ### 4. Run the Application
+
+**Full UI (recommended):** sidebar navigation, batch uploads, saved summary library, Ask/RAG — use:
+
+```bash
+streamlit run app.py
+```
+
+**Minimal demo** (single-file flow, fewer features):
+
 ```bash
 streamlit run app_local.py
 ```
@@ -49,38 +61,35 @@ ollama pull bakllava         # Alternative vision model
 ollama pull moondream         # Lightweight vision model
 ```
 
-### Text Models (for video synthesis)
+### Text Models (for synthesis / page merge / Q&A)
 ```bash
-# General purpose
+ollama pull llama3            # default preference
+ollama pull qwen2.5          # alternative instruct model
+ollama pull mistral
+
+# Legacy / niche
 ollama pull llama2:7b
-ollama pull llama2:13b
-
-# Instruction-tuned
 ollama pull codellama:7b      # Code-focused
-ollama pull orca-mini:7b      # Chat-optimized
-
-# Larger models for better synthesis
-ollama pull llama2:70b        # Very high quality (requires lots of RAM)
 ```
 
 ## 📋 System Requirements
 
-### Minimum (LLaVA 7B + Llama2 7B)
+### Minimum (lighter models; see pulls above)
 - RAM: 16GB
-- Storage: 20GB free space
+- Storage: ~25GB free space
 - OS: macOS, Linux, or Windows
 
-### Recommended (LLaVA 13B + Llama2 13B)
+### Recommended (Llama 3 + LLaVA 13B — default setup)
 - RAM: 32GB
-- Storage: 40GB free space
-- GPU: Optional but recommended for faster inference
+- Storage: ~40GB+ free space (models + uploads)
+- GPU: Optional; Metal/CUDA speeds things up when available
 
 ## 🔄 How It Works
 
 1. **Frame Extraction**: Videos are sampled into evenly-spaced frames
 2. **Vision Analysis**: Each frame analyzed by LLaVA for visual content
 3. **Audio Transcription**: Whisper extracts speech (if available)
-4. **Synthesis**: Llama2 combines visuals + audio into narrative
+4. **Synthesis**: The chosen text model (e.g. Llama 3) combines visuals + transcripts into narrative summaries
 
 ## ⚙️ Configuration
 
@@ -109,8 +118,9 @@ ollama serve
 # Check models
 ollama list
 
-# Test a model
-ollama run llava:7b "Describe this image" --image test.jpg
+# Test vision / text (adjust tags to what you installed)
+ollama run llava:13b
+ollama run llama3
 ```
 
 ### Memory Issues

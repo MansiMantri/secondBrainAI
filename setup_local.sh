@@ -1,6 +1,11 @@
 #!/bin/bash
 # setup_local.sh - Automated setup for SecondBrainAI Local
 # Run with: bash setup_local.sh
+#
+# Pulls default Ollama models aligned with vision_engine_local.py:
+#   - llama3          (text: summaries, page merge, Q&A)
+#   - llava:13b       (vision: per-page / frame analysis)
+# Low-resource machines can skip and pull llava:7b + a smaller text model instead.
 
 set -e  # Exit on any error
 
@@ -58,25 +63,33 @@ if ! ollama list &> /dev/null; then
 fi
 echo "✅ Ollama connected"
 
-# Download required models
+# Download recommended models (match app defaults in vision_engine_local.py)
 echo "🤖 Downloading AI models..."
-echo "   This may take 10-30 minutes depending on your internet speed..."
+echo "   Default pulls: llama3 (text) + llava:13b (vision)."
+echo "   This may take 20–60+ minutes depending on bandwidth; total size is often ~12–18 GB."
+echo ""
 
-# Download vision model
-if ! ollama list | grep -q "llava:7b"; then
-    echo "   📥 Downloading LLaVA vision model (4.7GB)..."
-    ollama pull llava:7b
+# Text: prefer Llama 3 family (skip pull if any llama3* tag is already installed)
+if ollama list 2>/dev/null | awk '{print $1}' | grep -qE '^llama3'; then
+    echo "   ✅ Llama 3 text model — already present"
 else
-    echo "   ✅ LLaVA vision model already downloaded"
+    echo "   📥 Downloading Llama 3 text model (llama3)..."
+    ollama pull llama3
 fi
 
-# Download text model
-if ! ollama list | grep -q "llama2:7b"; then
-    echo "   📥 Downloading Llama2 text model (3.8GB)..."
-    ollama pull llama2:7b
+# Vision: LLaVA 13B (stronger than 7B for figures/layout)
+if ollama list 2>/dev/null | awk '{print $1}' | grep -qxF "llava:13b"; then
+    echo "   ✅ LLaVA 13B vision model — already present"
 else
-    echo "   ✅ Llama2 text model already downloaded"
+    echo "   📥 Downloading LLaVA 13B vision model (llava:13b)..."
+    ollama pull llava:13b
 fi
+
+echo ""
+echo "   Optional (smaller / older — use if low RAM or disk):"
+echo "     ollama pull llava:7b"
+echo "     ollama pull llama2:7b"
+echo "   Optional (alternatives): ollama pull qwen2.5  OR  ollama pull mistral"
 
 # Setup Python virtual environment
 echo "🐍 Setting up Python environment..."
@@ -110,8 +123,9 @@ echo "🎉 Setup complete!"
 echo "=================="
 echo "To run SecondBrainAI Local:"
 echo "1. Activate the environment: source secondbrain_env/bin/activate"
-echo "2. Start the app: streamlit run app_local.py"
+echo "2. Start the full UI: streamlit run app.py"
+echo "   (minimal demo: streamlit run app_local.py)"
 echo "3. Open your browser to the displayed URL"
+echo "4. In the sidebar, confirm Vision ≈ llava:13b and Text ≈ llama3 (or your installed tags)"
 echo ""
-echo "For team members, share SETUP_LOCAL.md for manual setup instructions."</content>
-<parameter name="filePath">/Users/sanchitvartak/Desktop/Spring26/AI_BNgan/ai-project/secondBrainAI/setup_local.sh
+echo "For team members, share SETUP_LOCAL.md for manual setup instructions."

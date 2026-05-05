@@ -9,14 +9,17 @@ from pathlib import Path
 
 import streamlit as st
 
-from ingest_logic import VIDEO_EXTS, extract_audio_from_video, media_to_images
+from ingest_logic import VIDEO_EXTS, extract_audio_from_video, extract_pdf_page_text, media_to_images
 from audio_engine import transcribe_audio
 from vision_engine_local import (
     visual_summary_from_image,
     video_summary_from_frame_summaries,
+    detailed_page_summary_from_extract_and_visual,
     check_ollama_models,
     DEFAULT_VISION_MODEL,
-    DEFAULT_TEXT_MODEL
+    DEFAULT_TEXT_MODEL,
+    pick_default_vision_model,
+    pick_default_text_model,
 )
 
 
@@ -26,9 +29,13 @@ st.title("SecondBrainAI Vision mRAG - Local Version")
 st.write("Upload a PDF, image, or video. Uses local Ollama models for OCR-free Visual Summaries.")
 st.write("**No API keys required** - runs entirely on your machine.")
 
+_models_info = check_ollama_models()
+_default_vision = pick_default_vision_model(_models_info)
+_default_text = pick_default_text_model(_models_info)
+
 # Check Ollama status
 with st.expander("🔍 Ollama Status"):
-    models = check_ollama_models()
+    models = _models_info
     if models.get('error'):
         st.error(f"Ollama connection failed: {models['error']}")
         st.info("Make sure Ollama is running: `ollama serve`")
@@ -52,7 +59,7 @@ with st.expander("🔍 Ollama Status"):
                     st.code(model)
             else:
                 st.warning("No text models found. Install with:")
-                st.code("ollama pull llama2:7b")
+                st.code("ollama pull llama3")
 
 ALLOWED_TYPES = ["pdf", "png", "jpg", "jpeg", "webp", "mp4", "mov", "mkv", "webm", "avi"]
 uploaded = st.file_uploader("Upload a file", type=ALLOWED_TYPES)
@@ -62,18 +69,23 @@ video_max_frames = st.slider("Max video frames to extract", min_value=2, max_val
 
 # Model selection
 col1, col2 = st.columns(2)
+_vm_opts = models.get("vision", []) or [DEFAULT_VISION_MODEL]
+_tm_opts = models.get("text", []) or [DEFAULT_TEXT_MODEL]
+_vi = _vm_opts.index(_default_vision) if _default_vision in _vm_opts else 0
+_ti = _tm_opts.index(_default_text) if _default_text in _tm_opts else 0
+
 with col1:
     vision_model = st.selectbox(
         "Vision Model",
-        options=models.get('vision', [DEFAULT_VISION_MODEL]),
-        index=0 if models.get('vision') else None
+        options=_vm_opts,
+        index=_vi,
     )
 
 with col2:
     text_model = st.selectbox(
         "Text Synthesis Model",
-        options=models.get('text', [DEFAULT_TEXT_MODEL]),
-        index=0 if models.get('text') else None
+        options=_tm_opts,
+        index=_ti,
     )
 
 
@@ -118,9 +130,37 @@ if uploaded is not None:
     frame_summaries: list[str] = []
     frame_labels: list[str] = []
 
-    for p in image_paths:
-        with st.spinner(f"Summarizing {p.name} with {vision_model}..."):
-            summary = visual_summary_from_image(p, source_id=str(p), model_name=vision_model)
+    for page_idx, p in enumerate(image_paths):
+        extracted_txt = ""
+        if pdf_or_media_path.suffix.lower() == ".pdf":
+            try:
+                extracted_txt = extract_pdf_page_text(pdf_or_media_path, page_idx)
+            except Exception:
+                extracted_txt = ""
+        with st.spinner(f"Summarizing {p.name} ({vision_model})…"):
+            visual_part = visual_summary_from_image(
+                p,
+                source_id=str(p),
+                model_name=vision_model,
+                page_extracted_text=extracted_txt if extracted_txt.strip() else None,
+            )
+        if extracted_txt.strip():
+            with st.spinner(f"Detailed page summary ({text_model})…"):
+                try:
+                    summary = detailed_page_summary_from_extract_and_visual(
+                        extracted_txt,
+                        visual_part,
+                        source_id=str(p),
+                        model_name=text_model,
+                    )
+                except Exception as exc:
+                    summary = (
+                        f"{visual_part}\n\n---\n\n"
+                        f"*Detailed rewrite failed ({exc}). Raw extract:*\n\n"
+                        f"{extracted_txt.strip()[:80000]}"
+                    )
+        else:
+            summary = visual_part
         frame_summaries.append(summary)
         frame_labels.append(p.stem)
 

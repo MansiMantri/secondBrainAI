@@ -97,6 +97,36 @@ def pdf_slides_to_images(
             pdf.close()
 
 
+def extract_pdf_page_text(pdf_path: Union[str, Path], page_index: int) -> str:
+    """
+    Extract embedded text from one PDF page via PDFium (the PDF text layer).
+
+    Returns \"\" for non-PDFs, out-of-range pages, or pages with no extractable text
+    (e.g. scanned images only). This is the most reliable \"what the document says\"
+    signal for text-based PDFs; vision summaries alone often hallucinate.
+    """
+    pdf_path = _as_path(pdf_path)
+    if pdf_path.suffix.lower() != ".pdf":
+        return ""
+
+    pdf = pdfium.PdfDocument(str(pdf_path))
+    try:
+        if page_index < 0 or page_index >= len(pdf):
+            return ""
+        page = pdf.get_page(page_index)
+        try:
+            textpage = page.get_textpage()
+            try:
+                raw = textpage.get_text_range()
+                return raw.replace("\r\n", "\n").replace("\r", "\n").strip()
+            finally:
+                textpage.close()
+        finally:
+            page.close()
+    finally:
+        pdf.close()
+
+
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}
 
