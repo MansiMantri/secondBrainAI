@@ -1,0 +1,19 @@
+# Local SecondBrainAI Requirements (No API Keys Needed)
+# Install with: pip install -r requirements_local.txt
+
+# Core dependencies
+streamlit
+pypdfium2
+pillow
+python-dotenv
+imageio
+imageio-ffmpeg
+
+# Audio transcription (local)
+openai-whisper
+
+# Local AI models (Ollama client)
+ollama
+
+# Optional: Vector database for RAG
+chromadb

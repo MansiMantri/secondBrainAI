@@ -1,2 +1,71 @@
+# --- Project ---
 ext_resources/
 .env
+.env.local
+.env.*.local
+
+# Local venv (setup_local.sh)
+secondbrain_env/
+.venv/
+venv/
+ENV/
+env/
+
+# User uploads & generated runs (app.py / app_local.py)
+data/uploads/
+data/processed/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test / type / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# --- OS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Editors / IDEs ---
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Streamlit secrets (keep config.toml if you track it) ---
+.streamlit/secrets.toml
+
+# --- ML / download caches (Hugging Face, torch hub, etc.) ---
+.cache/
+
+# --- Logs & temp ---
+*.log
+*.tmp
+*.temp

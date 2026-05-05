@@ -1,0 +1,3 @@
+# Backwards compatibility - alias the local functions
+visual_summary_from_image = visual_summary_from_image_local
+video_summary_from_frame_summaries = video_summary_from_frame_summaries_local
