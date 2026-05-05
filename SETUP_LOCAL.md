@@ -475,15 +475,24 @@ ollama pull llava:13b" > models_required.txt
 
 ## 🚀 Quick Setup Script
 
-The repository includes **`setup_local.sh`** in the `secondBrainAI` folder. It installs Ollama (macOS via Homebrew when available), starts the service, pulls **`llama3`** and **`llava:13b`** when missing, creates `secondbrain_env`, and installs `requirements_local.txt`.
+The repository includes:
+
+| Script | Purpose |
+|--------|--------|
+| **`install.sh`** | Wrapper that runs **`setup_local.sh`** (same folder). Use this as the single “installer” after `git clone`. |
+| **`setup_local.sh`** | Installs Ollama when needed (macOS via Homebrew when available), starts the service, pulls **`llama3`** and **`llava:13b`** when missing, creates **`secondbrain_env`**, and installs **`requirements_local.txt`**. |
+| **`run_app.sh`** | Activates **`secondbrain_env`** and runs **`streamlit run app.py`** (shortcut to open the UI). |
 
 ```bash
 cd secondBrainAI
-chmod +x setup_local.sh
-bash setup_local.sh
+chmod +x install.sh run_app.sh setup_local.sh   # optional
+bash install.sh          # or: bash setup_local.sh
+bash run_app.sh          # opens the app in your browser
 ```
 
-After it finishes: `source secondbrain_env/bin/activate` then `streamlit run app.py`.
+After setup you can also run manually: `source secondbrain_env/bin/activate` then `streamlit run app.py`.
+
+**Saved sessions:** Ask threads and summarized runs are stored under **`data/interactions/`** (gitignored) so the sidebar **Chats** list can reload prior document context locally.
 
 ---
 

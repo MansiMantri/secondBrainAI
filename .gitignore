@@ -14,6 +14,8 @@ env/
 # User uploads & generated runs (app.py / app_local.py)
 data/uploads/
 data/processed/
+# Saved Ask/summarize sessions (sidebar Chats)
+data/interactions/
 
 # --- Python ---
 __pycache__/

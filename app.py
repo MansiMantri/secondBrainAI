@@ -12,6 +12,14 @@ from ingest_logic import (
     media_to_images,
 )
 from audio_engine import transcribe_audio
+from interaction_storage import (
+    apply_loaded_interaction,
+    list_interactions,
+    load_interaction,
+    new_interaction_record,
+    save_interaction,
+    update_interaction_chat,
+)
 # ── Local Ollama engine — no API key needed ───────────────────────────────────
 from vision_engine_local import (
     visual_summary_from_image_local as _vision_fn,
@@ -31,6 +39,27 @@ st.set_page_config(
     page_title="SecondBrainAI Vision mRAG",
     layout="wide",
     initial_sidebar_state="expanded",
+)
+
+# Browser hard-reload (F5): flag URL so the next run can reset session before widgets mount.
+st.html(
+    """
+<script>
+(function(){
+  try {
+    var nav = performance.getEntriesByType("navigation")[0];
+    var legacy = typeof performance.navigation !== "undefined" && performance.navigation.type === 1;
+    var isReload = legacy || (nav && nav.type === "reload");
+    if (!isReload) return;
+    var u = new URL(window.location.href);
+    if (u.searchParams.get("sb_reload") === "1") return;
+    u.searchParams.set("sb_reload", "1");
+    window.location.replace(u.toString());
+  } catch (e) {}
+})();
+</script>
+""",
+    unsafe_allow_javascript=True,
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -116,6 +145,13 @@ html, body, .stApp,
   box-shadow: inset 4px 4px 9px var(--sd), inset -4px -4px 9px var(--sl),
     0 0 0 2px rgba(108, 99, 255, 0.28) !important;
 }
+/* Ask prompt box — Safari/Chrome can still paint light text unless text-fill-color is forced */
+[data-testid="stAppViewContainer"] [data-testid="stTextArea"] textarea,
+section.main [data-testid="stTextArea"] textarea {
+  color: var(--text1) !important;
+  -webkit-text-fill-color: var(--text1) !important;
+  caret-color: var(--accent) !important;
+}
 [data-testid="stTextArea"] [data-baseweb="base-input"] {
   background: transparent !important;
   border: none !important;
@@ -158,11 +194,33 @@ html, body, .stApp,
   font-weight: 600 !important;
   color: var(--text1) !important;
 }
-/* Expander headers: keep label readable; avoid accent “flash” on hover (Streamlit/BaseWeb default) */
+/* Expander headers — no hover/focus tint, ring, or border shift (BaseWeb/streamlit defaults) */
 [data-testid="stExpander"] summary:hover,
+[data-testid="stExpander"] summary:focus,
 [data-testid="stExpander"] summary:focus-visible {
   color: var(--text1) !important;
   background: transparent !important;
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+[data-testid="stExpander"] details,
+[data-testid="stExpander"] details:hover,
+[data-testid="stExpander"] details:focus-within {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+[data-testid="stExpander"] [data-testid="stVerticalBlockBorderWrapper"] {
+  border-color: rgba(30, 35, 64, 0.1) !important;
+  transition: none !important;
+}
+[data-testid="stExpander"] details:hover [data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stExpander"] details:focus-within [data-testid="stVerticalBlockBorderWrapper"] {
+  border-color: rgba(30, 35, 64, 0.1) !important;
+}
+[data-testid="stExpander"] button {
+  transition: none !important;
 }
 /* Plaintext blocks (st.text) — Streamlit can render white monospace on light panels */
 [data-testid="stText"],
@@ -202,6 +260,30 @@ p.sb-verbatim-help {
   font-family: 'Inter', sans-serif !important;
   font-size: var(--body) !important;
   color: var(--text1) !important;
+}
+/* Chat markdown: lists/headings often stay white on light assistant panels — fix without touching user bubble text */
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ol,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] ul,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h1,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h2,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h3,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h4,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h5,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] h6,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] blockquote,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] table,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] th,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] td {
+  color: var(--text1) !important;
+}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] pre,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] code {
+  color: var(--text2) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] a {
+  color: var(--accent) !important;
 }
 [data-testid="element-container"] [data-testid="stAlert"] {
   font-family: 'Inter', sans-serif !important;
@@ -678,6 +760,14 @@ div[class*="uploadedFile"]             { display:none !important; }
   font-size: var(--body) !important;
   font-weight: 700 !important;
 }
+/* Sidebar “Chats” — tertiary acts like a clickable title */
+[data-testid="stSidebar"] button[kind="tertiary"] {
+  justify-content: flex-start !important;
+  text-align: left !important;
+  font-weight: 600 !important;
+  font-size: var(--body-sm) !important;
+  color: var(--text1) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -721,7 +811,25 @@ _defaults: dict = {
     "corpus_summary":   None,
     "corpus_context":   None,
     "chat_messages":    [],
+    "active_interaction_id": None,  # persisted session for Ask / Chats sidebar
+    "_qa_prompt_widget_id": 0,       # bumps to reset Ask text_area after answering
+    "sidebar_nav": "upload",         # upload | ask (must match st.radio options)
 }
+if str(st.query_params.get("sb_reload", "")).strip() == "1":
+    st.session_state.clear()
+    try:
+        del st.query_params["sb_reload"]
+    except Exception:
+        try:
+            st.query_params.clear()
+        except Exception:
+            pass
+    for _k, _v in _defaults.items():
+        st.session_state[_k] = copy.deepcopy(_v)
+    # New key so Streamlit mounts a fresh file uploader widget after reload.
+    st.session_state["uploader_key"] = int(time.time() * 1000) % 1_000_000_007
+    st.rerun()
+
 for _k, _v in _defaults.items():
     if _k not in st.session_state:
         st.session_state[_k] = copy.deepcopy(_v)
@@ -734,6 +842,10 @@ if "uploaded_file" in ss:
         ss["uploaded_files"] = [_legacy]
 if "frame_verbatim_extracts" not in ss:
     ss["frame_verbatim_extracts"] = []
+if "active_interaction_id" not in ss:
+    ss["active_interaction_id"] = None
+if "_qa_prompt_widget_id" not in ss:
+    ss["_qa_prompt_widget_id"] = 0
 
 ollama_info = _get_ollama_models()
 ollama_ok = not bool(ollama_info.get("error"))
@@ -867,10 +979,12 @@ if not ollama_ok:
     )
 
 # ── Sidebar: switch Upload vs Ask ─────────────────────────────────────────────
-if "sidebar_nav" not in st.session_state:
-    st.session_state.sidebar_nav = "upload"
 with st.sidebar:
     st.markdown('<p class="sidebar-title">SecondBrainAI</p>', unsafe_allow_html=True)
+    # Apply programmatic nav *before* st.radio mounts (same-run assignment after radio errors).
+    _pending_nav = st.session_state.pop("_pending_sidebar_nav", None)
+    if _pending_nav in ("upload", "ask"):
+        st.session_state.sidebar_nav = _pending_nav
     st.radio(
         "Section",
         ["upload", "ask"],
@@ -880,10 +994,61 @@ with st.sidebar:
         key="sidebar_nav",
         label_visibility="collapsed",
     )
-    st.caption(
-        "Upload and run summaries on the first screen; ask questions about the "
-        "last completed run on the second."
-    )
+    st.divider()
+    if st.button(
+        "New Chat",
+        key="sb_new_chat",
+        use_container_width=True,
+        type="primary",
+        help="Reload the page (same as a browser refresh).",
+    ):
+        st.html(
+            "<script>window.location.reload();</script>",
+            unsafe_allow_javascript=True,
+        )
+        st.stop()
+    st.markdown("**Chats**")
+    _records = list_interactions()
+    if not _records:
+        st.caption("No saved sessions yet—finish **Upload & summarize** first.")
+    else:
+        for _rec in _records[:60]:
+            _iid = str(_rec.get("id", ""))
+            if not _iid:
+                continue
+            _title = (_rec.get("title") or "Session").replace("\n", " ").strip()
+            if len(_title) > 52:
+                _title = _title[:49] + "…"
+            _when = (_rec.get("created_at") or "")[:16].replace("T", " ")
+            _msgs = _rec.get("chat_messages") or []
+            _n_user = sum(1 for _m in _msgs if (_m.get("role") == "user"))
+            _thread_n = len(_msgs)
+            _active = ss.get("active_interaction_id") == _iid
+            _btn_text = (("● " if _active else "") + _title)
+            if st.button(
+                _btn_text,
+                key=f"sb_open_chat_{_iid}",
+                type="tertiary",
+                use_container_width=True,
+                help=(
+                    f"{_when}. {_n_user} question(s). {_thread_n} message(s)."
+                    if _thread_n
+                    else f"{_when}. No prompts yet."
+                ),
+            ):
+                _loaded = load_interaction(_iid)
+                if _loaded:
+                    for _k, _v in apply_loaded_interaction(_loaded).items():
+                        ss[_k] = _v
+                    if not str(ss.get("corpus_context") or "").strip() and ss.get(
+                        "batch_sources"
+                    ):
+                        ss.corpus_context = format_multi_source_context(
+                            ss.batch_sources, include_verbatim=True
+                        )
+                    st.session_state["_pending_sidebar_nav"] = "ask"
+                    st.rerun()
+
 _nav = st.session_state.sidebar_nav
 
 # ── Full-width processing loader (spinner + stage + progress) ─────────────────
@@ -1203,15 +1368,18 @@ elif _nav == "ask":
         for m in ss.chat_messages or []:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
-        # Clear prompt on next run only *before* the widget is created (Streamlit disallows
-        # mutating ``app_qa_prompt`` after ``st.text_area`` has run on the same script pass).
+        # Fresh empty textarea after answering: bump widget key (Streamlit disallows resetting
+        # a keyed widget after it has rendered on the same script pass).
         if st.session_state.pop("_qa_prompt_clear_next", False):
-            st.session_state.pop("app_qa_prompt", None)
+            st.session_state["_qa_prompt_widget_id"] = (
+                int(st.session_state.get("_qa_prompt_widget_id") or 0) + 1
+            )
+        _qwk = int(st.session_state.get("_qa_prompt_widget_id") or 0)
         q_prompt = st.text_area(
             "Your question or instruction",
             placeholder="e.g. What are the main themes? Compare these files. List action items…",
             height=120,
-            key="app_qa_prompt",
+            key=f"app_qa_prompt_{_qwk}",
         )
         _ask_text_opts = text_models if text_models else vision_models
         if len(_ask_text_opts) > 1:
@@ -1251,6 +1419,13 @@ elif _nav == "ask":
                 ss.chat_messages.append({"role": "user", "content": q_prompt.strip()})
                 ss.chat_messages.append({"role": "assistant", "content": ans})
                 st.session_state["_qa_prompt_clear_next"] = True
+                if ss.get("active_interaction_id"):
+                    try:
+                        update_interaction_chat(
+                            str(ss.active_interaction_id), list(ss.chat_messages or [])
+                        )
+                    except Exception:
+                        pass
                 st.rerun()
 
 
@@ -1306,6 +1481,7 @@ if start_clicked and has_file and not is_proc:
     ss.video_summary = None
     ss.transcript = None
     ss.chat_messages = []
+    ss.active_interaction_id = None
     st.rerun()
 
 if terminate_clicked and is_proc:
@@ -1389,6 +1565,32 @@ if ss.stage == "batch_finalize":
         ss.error = str(exc)
         ss.corpus_summary = None
         ss.corpus_context = None
+    if ss.batch_sources and (ss.corpus_summary or ss.corpus_context):
+        try:
+            _meta = [
+                {
+                    "name": str(x.get("name", "")),
+                    "media_path": str(x.get("media_path", "")),
+                    "run_dir": str(x.get("run_dir", "")),
+                    "is_video": bool(x.get("is_video")),
+                }
+                for x in (ss.batch_queue or [])
+            ]
+            _rec = new_interaction_record(
+                batch_sources=list(ss.batch_sources),
+                corpus_summary=ss.corpus_summary,
+                corpus_context=ss.corpus_context,
+                source_batch=_meta,
+                text_model=str(ss.text_model),
+                vision_model=str(ss.vision_model),
+                chat_messages=[],
+            )
+            save_interaction(_rec)
+            ss.active_interaction_id = _rec["id"]
+            ss.chat_messages = []
+        except Exception as exc:
+            _msg = f"Could not save session to disk: {exc}"
+            ss.error = f"{ss.error} | {_msg}" if ss.error else _msg
     ss.stage = "done"
     ss.processing = False
     st.rerun()

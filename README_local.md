@@ -4,6 +4,17 @@ Run the complete video/image summarization pipeline locally using Ollama models 
 
 ## 🚀 Quick Start
 
+### 0. Clone and install (recommended)
+
+From the **`secondBrainAI`** folder in your clone:
+
+```bash
+bash install.sh
+bash run_app.sh
+```
+
+`install.sh` runs the full Ollama + Python setup (`setup_local.sh`). `run_app.sh` starts **`streamlit run app.py`**. Summarize runs and Ask threads are saved under `data/interactions/` for the sidebar **Chats** menu.
+
 ### 1. Install Ollama
 ```bash
 # macOS
